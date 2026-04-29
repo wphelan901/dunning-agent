@@ -1,8 +1,7 @@
 /**
- * netsuite.js — NetSuite REST/SuiteQL with OAuth 1.0a TBA
+ * netsuite.js — NetSuite REST/SuiteQL using netsuite-rest library
  */
-const fetch  = require('node-fetch');
-const crypto = require('crypto');
+const NsRest = require('netsuite-rest');
 
 const {
   NETSUITE_ACCOUNT_ID,
@@ -12,64 +11,31 @@ const {
   NETSUITE_TOKEN_SECRET,
 } = process.env;
 
-function encode(str) {
-  return encodeURIComponent(String(str))
-    .replace(/[!'()*]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
-}
-
-function buildAuthHeader(method, url) {
-  const timestamp = Math.floor(Date.now() / 1000);
-  const nonce     = crypto.randomBytes(16).toString('hex');
-  const realm     = NETSUITE_ACCOUNT_ID.toUpperCase().replace(/-/g, '_');
-
-  const params = {
-    oauth_consumer_key:     NETSUITE_CONSUMER_KEY,
-    oauth_nonce:            nonce,
-    oauth_signature_method: 'HMAC-SHA256',
-    oauth_timestamp:        String(timestamp),
-    oauth_token:            NETSUITE_TOKEN_ID,
-    oauth_version:          '1.0',
-  };
-
-  const sortedParams = Object.keys(params).sort()
-    .map(k => `${encode(k)}=${encode(params[k])}`).join('&');
-
-  const baseString = [method.toUpperCase(), encode(url), encode(sortedParams)].join('&');
-  const signingKey = `${encode(NETSUITE_CONSUMER_SECRET)}&${encode(NETSUITE_TOKEN_SECRET)}`;
-  const signature  = crypto.createHmac('sha256', signingKey).update(baseString).digest('base64');
-
-  const headerParts = Object.keys(params).sort()
-    .map(k => `${k}="${encode(params[k])}"`)
-    .concat(`oauth_signature="${encode(signature)}"`);
-
-  return `OAuth realm="${realm}",${headerParts.join(',')}`;
-}
-
-function getHost() {
-  return NETSUITE_ACCOUNT_ID.toLowerCase().replace(/_/g, '-');
+function getClient() {
+  return new NsRest({
+    consumer_key:    NETSUITE_CONSUMER_KEY,
+    consumer_secret: NETSUITE_CONSUMER_SECRET,
+    token:           NETSUITE_TOKEN_ID,
+    token_secret:    NETSUITE_TOKEN_SECRET,
+    account:         NETSUITE_ACCOUNT_ID,
+    base_url:        `https://${NETSUITE_ACCOUNT_ID.toLowerCase().replace(/_/g,'-')}.suitetalk.api.netsuite.com`,
+  });
 }
 
 async function runSuiteQL(sql, limit = 1000, offset = 0) {
-  const baseUrl = `https://${getHost()}.suitetalk.api.netsuite.com/services/rest/query/v1/suiteql`;
-  const fullUrl = `${baseUrl}?limit=${limit}&offset=${offset}`;
-  const auth    = buildAuthHeader('POST', baseUrl);
-
-  console.log('[netsuite] SuiteQL request to:', baseUrl);
-
-  const res  = await fetch(fullUrl, {
-    method:  'POST',
-    headers: {
-      'Authorization': auth,
-      'Content-Type':  'application/json',
-      'Prefer':        'transient',
-    },
-    body: JSON.stringify({ q: sql }),
+  const ns  = getClient();
+  const res = await ns.request({
+    path:   `query/v1/suiteql?limit=${limit}&offset=${offset}`,
+    method: 'POST',
+    body:   JSON.stringify({ q: sql }),
+    headers: { 'Content-Type': 'application/json', 'Prefer': 'transient' },
   });
 
-  const text = await res.text();
-  console.log('[netsuite] Response:', res.status, text.slice(0, 300));
-  if (!res.ok) throw new Error(`NetSuite SuiteQL error ${res.status}: ${text}`);
-  return JSON.parse(text);
+  if (res.status !== 200) {
+    const text = await res.text();
+    throw new Error(`NetSuite SuiteQL error ${res.status}: ${text}`);
+  }
+  return res.json();
 }
 
 async function fetchOverdueInvoices() {
@@ -96,18 +62,21 @@ async function fetchOverdueInvoices() {
 }
 
 async function sendNetSuiteEmail({ customerId, subject, body }) {
-  const url  = `https://${getHost()}.suitetalk.api.netsuite.com/services/rest/record/v1/message`;
-  const auth = buildAuthHeader('POST', url);
-  const res  = await fetch(url, {
-    method:  'POST',
-    headers: { 'Authorization': auth, 'Content-Type': 'application/json' },
-    body:    JSON.stringify({
+  const ns  = getClient();
+  const res = await ns.request({
+    path:   'record/v1/message',
+    method: 'POST',
+    body:   JSON.stringify({
       subject, message: body, incoming: false,
       messageType: { id: 'EMAIL' },
       recipient:   [{ id: String(customerId) }],
     }),
+    headers: { 'Content-Type': 'application/json' },
   });
-  if (!res.ok) { const t = await res.text(); throw new Error(`NetSuite email error ${res.status}: ${t}`); }
+  if (res.status !== 200 && res.status !== 204) {
+    const t = await res.text();
+    throw new Error(`NetSuite email error ${res.status}: ${t}`);
+  }
   return true;
 }
 
