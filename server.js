@@ -7,7 +7,7 @@ const express      = require('express');
 const session      = require('express-session');
 const helmet       = require('helmet');
 const rateLimit    = require('express-rate-limit');
-const bcrypt       = require('bcryptjs');
+const crypto_auth  = require('crypto');
 const path         = require('path');
 const xss          = require('xss');
 const { CronJob }  = require('cron');
@@ -19,6 +19,17 @@ const { requireAuth } = require('./middleware/auth');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
+
+// ── PBKDF2 password verification (no external library needed) ────────────────
+function verifyPassword(password, storedHash) {
+  try {
+    const parts = storedHash.split(':');
+    const salt = Buffer.from(parts[3], 'base64');
+    const storedKey = Buffer.from(parts[4], 'base64');
+    const key = crypto_auth.pbkdf2Sync(password, salt, parseInt(parts[2]), storedKey.length, 'sha256');
+    return crypto_auth.timingSafeEqual(key, storedKey);
+  } catch { return false; }
+}
 
 // ── Load users ───────────────────────────────────────────────────────────────
 let USERS = [];
@@ -86,7 +97,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
   const user = USERS.find(u => u.username.toLowerCase() === username);
   if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
-  const valid = await bcrypt.compare(password, user.passwordHash);
+  const valid = verifyPassword(password, user.passwordHash);
   if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
 
   req.session.regenerate(err => {
