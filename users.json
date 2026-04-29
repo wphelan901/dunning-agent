@@ -1,0 +1,20 @@
+[
+  {
+    "username": "admin",
+    "passwordHash": "REPLACE_WITH_BCRYPT_HASH",
+    "name": "Admin",
+    "role": "admin"
+  },
+  {
+    "username": "sharon",
+    "passwordHash": "REPLACE_WITH_BCRYPT_HASH",
+    "name": "Sharon",
+    "role": "viewer"
+  },
+  {
+    "username": "jeff",
+    "passwordHash": "REPLACE_WITH_BCRYPT_HASH",
+    "name": "Jeff",
+    "role": "viewer"
+  }
+]

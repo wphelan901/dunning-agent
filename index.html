@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dunning Agent — America's Best Carpet & Tile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0f0f0e; --bg2:#161614; --bg3:#1c1c19;
+    --border:rgba(255,255,255,0.07); --border2:rgba(255,255,255,0.13);
+    --text:#f0ede8; --text2:#8a8780; --text3:#5a5855;
+    --amber:#e8a435; --amber-dim:rgba(232,164,53,0.12);
+    --red:#d94f4f; --red-dim:rgba(217,79,79,0.1);
+    --green:#4caf82; --green-dim:rgba(76,175,130,0.1);
+    --blue:#5b8dee; --blue-dim:rgba(91,141,238,0.1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;}
+  body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(255,255,255,0.015) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.015) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0;}
+  .app{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:0 24px 60px;}
+
+  /* Header */
+  .header{display:flex;align-items:flex-end;justify-content:space-between;padding:32px 0 24px;border-bottom:1px solid var(--border);margin-bottom:24px;gap:12px;flex-wrap:wrap;}
+  .logo{font-family:'Instrument Serif',serif;font-size:24px;letter-spacing:-0.02em;}
+  .logo em{font-style:italic;color:var(--amber);}
+  .tagline{font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;letter-spacing:0.06em;text-transform:uppercase;margin-top:3px;}
+  .header-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .sync-badge{font-family:'DM Mono',monospace;font-size:11px;color:var(--green);background:var(--green-dim);border:1px solid rgba(76,175,130,0.2);padding:5px 10px;border-radius:4px;display:flex;align-items:center;gap:6px;}
+  .sync-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s ease-in-out infinite;}
+  .sync-badge.stale{color:var(--amber);background:var(--amber-dim);border-color:rgba(232,164,53,0.2);}
+  .sync-badge.stale::before{background:var(--amber);}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+  .user-pill{font-size:12px;color:var(--text2);background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-family:'DM Mono',monospace;}
+
+  /* Buttons */
+  .btn{background:transparent;border:1px solid var(--border2);border-radius:4px;padding:7px 14px;font-size:12px;cursor:pointer;color:var(--text2);font-family:'DM Sans',sans-serif;transition:all 0.15s;white-space:nowrap;}
+  .btn:hover:not(:disabled){border-color:rgba(255,255,255,0.28);color:var(--text);background:rgba(255,255,255,0.04);}
+  .btn:disabled{opacity:0.35;cursor:default;}
+  .btn-primary{background:var(--amber);border-color:var(--amber);color:#0f0f0e;font-weight:500;}
+  .btn-primary:hover:not(:disabled){background:#f0b040;border-color:#f0b040;color:#0f0f0e;}
+  .btn-sm{padding:5px 10px;font-size:11px;}
+  .btn-ghost{border-color:transparent;}
+  .btn-ghost:hover:not(:disabled){border-color:var(--border2);}
+
+  /* Metrics */
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;}
+  .metric{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:18px 20px;position:relative;overflow:hidden;transition:border-color 0.2s;}
+  .metric:hover{border-color:var(--border2);}
+  .metric-accent{position:absolute;top:0;left:0;right:0;height:2px;}
+  .metric-label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;font-family:'DM Mono',monospace;margin-bottom:8px;}
+  .metric-value{font-family:'Instrument Serif',serif;font-size:30px;color:var(--text);line-height:1;margin-bottom:4px;}
+  .metric-value.red{color:var(--red);}
+  .metric-value.amber{color:var(--amber);}
+  .metric-sub{font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;}
+
+  /* Filter bar */
+  .filterbar{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;padding:14px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;}
+  .filter-section{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .filter-sep{width:1px;height:20px;background:var(--border);margin:0 4px;}
+  .filter-label{font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap;}
+  .chip{background:transparent;border:1px solid var(--border);border-radius:4px;padding:4px 11px;font-size:11px;cursor:pointer;color:var(--text3);font-family:'DM Mono',monospace;transition:all 0.15s;white-space:nowrap;}
+  .chip:hover{border-color:var(--border2);color:var(--text2);}
+  .chip.active{background:var(--amber-dim);border-color:rgba(232,164,53,0.35);color:var(--amber);}
+  .search-wrap{position:relative;flex:1;min-width:160px;max-width:280px;}
+  .search-wrap input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:6px 10px 6px 30px;font-size:12px;color:var(--text);font-family:'DM Mono',monospace;outline:none;transition:border-color 0.15s;}
+  .search-wrap input:focus{border-color:var(--amber);}
+  .search-wrap input::placeholder{color:var(--text3);}
+  .search-icon{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:12px;pointer-events:none;}
+  .clear-search{position:absolute;right:8px;top:50%;transform:translateY(-50%);color:var(--text3);cursor:pointer;font-size:14px;display:none;background:none;border:none;padding:0;line-height:1;}
+  .clear-search.show{display:block;}
+
+  /* Table */
+  .table-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px;}
+  .table-actions{display:flex;gap:6px;align-items:center;}
+  .table-wrap{border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--bg2);}
+  table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px;}
+  col.c0{width:38px;}col.c1{width:110px;}col.c2{width:auto;}col.c3{width:100px;}col.c4{width:88px;}col.c5{width:54px;}col.c6{width:80px;}col.c7{width:82px;}
+  thead tr{border-bottom:1px solid var(--border);background:var(--bg3);}
+  th{padding:10px 14px;text-align:left;font-weight:400;font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.06em;cursor:pointer;user-select:none;white-space:nowrap;}
+  th:hover{color:var(--text2);}
+  th.sorted{color:var(--amber);}
+  th .sort-arrow{margin-left:4px;opacity:0.6;}
+  td{padding:10px 14px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr{transition:background 0.1s;cursor:default;}
+  tbody tr:hover td{background:rgba(255,255,255,0.02);}
+  tbody tr.selected td{background:var(--amber-dim);}
+  .inv-id{font-family:'DM Mono',monospace;font-size:12px;color:var(--blue);}
+  td.amount{font-family:'DM Mono',monospace;font-size:12px;text-align:right;padding-right:20px;}
+  td.due-date{font-family:'DM Mono',monospace;font-size:12px;color:var(--text2);}
+  td.days-num{font-family:'DM Mono',monospace;font-size:13px;font-weight:500;text-align:center;}
+  .badge{display:inline-block;padding:2px 8px;border-radius:3px;font-size:10px;font-family:'DM Mono',monospace;font-weight:500;letter-spacing:0.04em;text-transform:uppercase;}
+  .badge-60{background:var(--red-dim);color:var(--red);border:1px solid rgba(217,79,79,0.2);}
+  .badge-30{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(232,164,53,0.2);}
+  .checkbox{width:14px;height:14px;cursor:pointer;accent-color:var(--amber);}
+  .remind-btn{background:transparent;border:1px solid var(--border);border-radius:3px;padding:4px 10px;font-size:11px;cursor:pointer;color:var(--text3);font-family:'DM Mono',monospace;transition:all 0.15s;}
+  .remind-btn:hover{border-color:var(--amber);color:var(--amber);background:var(--amber-dim);}
+
+  /* Status bar */
+  .statusbar{display:flex;align-items:center;justify-content:space-between;margin-top:12px;flex-wrap:wrap;gap:8px;}
+  .sel-info{font-size:12px;color:var(--text3);font-family:'DM Mono',monospace;}
+  .sel-info strong{color:var(--amber);}
+  .count-info{font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;}
+
+  /* Modal overlay */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.72);display:none;align-items:center;justify-content:center;z-index:200;backdrop-filter:blur(4px);}
+  .modal-overlay.show{display:flex;}
+  .modal{background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:28px;width:540px;max-width:92vw;max-height:90vh;overflow-y:auto;}
+  .modal-title{font-family:'Instrument Serif',serif;font-size:20px;margin-bottom:6px;}
+  .modal-sub{font-size:12px;color:var(--text2);margin-bottom:22px;}
+  .modal-section-label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;font-family:'DM Mono',monospace;margin-bottom:10px;}
+
+  /* Template picker */
+  .template-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:22px;}
+  .template-card{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:14px;cursor:pointer;transition:all 0.15s;position:relative;}
+  .template-card:hover{border-color:var(--border2);}
+  .template-card.active{border-color:var(--amber);background:var(--amber-dim);}
+  .template-card-label{font-size:12px;font-weight:500;color:var(--text);margin-bottom:3px;}
+  .template-card-desc{font-size:11px;color:var(--text3);line-height:1.4;}
+  .template-dot{width:8px;height:8px;border-radius:50%;position:absolute;top:14px;right:14px;}
+
+  /* Invoice list in modal */
+  .modal-inv-list{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:12px 14px;font-size:12px;font-family:'DM Mono',monospace;color:var(--text2);max-height:160px;overflow-y:auto;margin-bottom:22px;line-height:1.9;}
+  .modal-actions{display:flex;gap:8px;justify-content:flex-end;}
+
+  /* Preview modal */
+  .preview-frame{width:100%;height:400px;border:1px solid var(--border);border-radius:6px;background:#fff;margin-bottom:20px;}
+
+  /* Toast */
+  .toast{position:fixed;bottom:24px;right:24px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:12px 18px;font-size:13px;color:var(--text);max-width:360px;display:none;z-index:300;box-shadow:0 8px 32px rgba(0,0,0,0.4);}
+  .toast.show{display:block;animation:slideUp 0.2s ease;}
+  .toast.success{border-color:rgba(76,175,130,0.3);}
+  .toast.error{border-color:rgba(217,79,79,0.3);}
+  .toast-title{font-weight:500;margin-bottom:2px;}
+  .toast-body{font-size:12px;color:var(--text2);}
+  @keyframes slideUp{from{transform:translateY(8px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+
+  /* Spinner */
+  .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--amber);border-radius:50%;animation:spin 0.7s linear infinite;vertical-align:middle;margin-right:6px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* Footer */
+  .footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;}
+  .footer-note{font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;}
+
+  @media(max-width:768px){
+    .metrics{grid-template-columns:repeat(2,1fr);}
+    .template-grid{grid-template-columns:1fr;}
+    col.c4,col.c5{display:none;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <header class="header">
+    <div>
+      <div class="logo">Dunning <em>Agent</em></div>
+      <div class="tagline">Accounts receivable · America's Best Carpet &amp; Tile</div>
+    </div>
+    <div class="header-right">
+      <div class="sync-badge" id="sync-badge">Loading…</div>
+      <div class="user-pill" id="user-pill">…</div>
+      <button class="btn btn-sm" id="refresh-btn" onclick="refreshData()" title="Re-fetch from NetSuite">↺ Refresh</button>
+      <button class="btn btn-sm" onclick="exportCSV()">Export CSV</button>
+      <button class="btn btn-sm" onclick="logout()">Sign out</button>
+    </div>
+  </header>
+
+  <!-- Metrics -->
+  <div class="metrics">
+    <div class="metric"><div class="metric-accent" style="background:var(--amber)"></div><div class="metric-label">Total overdue</div><div class="metric-value" id="m-count">—</div><div class="metric-sub">invoices · 30+ days</div></div>
+    <div class="metric"><div class="metric-accent" style="background:var(--red)"></div><div class="metric-label">Outstanding</div><div class="metric-value amber" id="m-amount">—</div><div class="metric-sub">USD remaining</div></div>
+    <div class="metric"><div class="metric-accent" style="background:var(--red)"></div><div class="metric-label">60–89 day bucket</div><div class="metric-value red" id="m-critical">—</div><div class="metric-sub">invoices · urgent</div></div>
+    <div class="metric"><div class="metric-accent" style="background:var(--blue)"></div><div class="metric-label">Customers</div><div class="metric-value" id="m-customers">—</div><div class="metric-sub">unique accounts</div></div>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="filterbar">
+    <div class="filter-section">
+      <span class="filter-label">Aging</span>
+      <button class="chip active" onclick="setAging('all',this)">All</button>
+      <button class="chip" onclick="setAging('30',this)">30–59 d</button>
+      <button class="chip" onclick="setAging('60',this)">60–89 d</button>
+    </div>
+    <div class="filter-sep"></div>
+    <div class="filter-section">
+      <span class="filter-label">Customer</span>
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input type="text" id="customer-search" placeholder="Search customer…" oninput="onSearch(this)">
+        <button class="clear-search" id="clear-btn" onclick="clearSearch()">×</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table toolbar -->
+  <div class="table-header">
+    <div class="sel-info" id="sel-info"></div>
+    <div class="table-actions">
+      <button class="btn btn-sm btn-ghost" onclick="selectAll()">Select all</button>
+      <button class="btn btn-sm btn-ghost" onclick="deselectAll()">Deselect</button>
+      <button class="btn btn-sm btn-primary" id="send-btn" onclick="openSendModal()" disabled>Send reminders</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <colgroup><col class="c0"><col class="c1"><col class="c2"><col class="c3"><col class="c4"><col class="c5"><col class="c6"><col class="c7"></colgroup>
+      <thead>
+        <tr>
+          <th><input type="checkbox" class="checkbox" id="select-all" onchange="toggleAll(this)"></th>
+          <th onclick="sortBy('tranId')">Invoice<span class="sort-arrow" id="sort-tranId"></span></th>
+          <th onclick="sortBy('customerName')">Customer<span class="sort-arrow" id="sort-customerName"></span></th>
+          <th style="text-align:right;padding-right:20px;" onclick="sortBy('amountRemaining')">Amount<span class="sort-arrow" id="sort-amountRemaining"></span></th>
+          <th onclick="sortBy('dueDate')">Due date<span class="sort-arrow" id="sort-dueDate"></span></th>
+          <th style="text-align:center;" onclick="sortBy('daysOverdue')">Days<span class="sort-arrow" id="sort-daysOverdue"></span></th>
+          <th>Bucket</th>
+          <th style="text-align:center;">Action</th>
+        </tr>
+      </thead>
+      <tbody id="tbl">
+        <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text3);font-family:'DM Mono',monospace;">Loading invoices from NetSuite…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="statusbar">
+    <div></div>
+    <div class="count-info" id="count-info"></div>
+  </div>
+
+  <footer class="footer">
+    <div class="footer-note">status=A · amountRemaining > 0 · dueDate ≤ today−30 · refreshed nightly 6am CT</div>
+    <div class="footer-note">America's Best Carpet &amp; Tile — Internal tool</div>
+  </footer>
+</div>
+
+<!-- Send modal -->
+<div class="modal-overlay" id="send-modal">
+  <div class="modal">
+    <div class="modal-title">Send payment reminders</div>
+    <div class="modal-sub" id="modal-sub"></div>
+
+    <div class="modal-section-label">Select template</div>
+    <div class="template-grid" id="template-grid"></div>
+
+    <div class="modal-section-label">Invoices in this batch</div>
+    <div class="modal-inv-list" id="modal-inv-list"></div>
+
+    <div class="modal-actions">
+      <button class="btn" onclick="previewTemplate()">Preview email</button>
+      <button class="btn" onclick="closeModal('send-modal')">Cancel</button>
+      <button class="btn btn-primary" id="confirm-send-btn" onclick="confirmSend()">Send via NetSuite</button>
+    </div>
+  </div>
+</div>
+
+<!-- Preview modal -->
+<div class="modal-overlay" id="preview-modal">
+  <div class="modal" style="width:620px;">
+    <div class="modal-title">Email preview</div>
+    <div class="modal-sub">This is how the email will appear to the customer.</div>
+    <iframe class="preview-frame" id="preview-frame" sandbox="allow-same-origin"></iframe>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('preview-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"><div class="toast-title" id="toast-title"></div><div class="toast-body" id="toast-body"></div></div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let ALL = [], filtered = [], selected = new Set();
+let activeAging = 'all', searchQuery = '', sortKey = 'daysOverdue', sortDir = -1;
+let templates = [], activeTemplate = 'friendly';
+let pendingIds = [];
+
+const fmt = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n);
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+(async () => {
+  try {
+    const me = await api('/api/me');
+    document.getElementById('user-pill').textContent = me.name || me.username;
+    if (me.role !== 'admin') document.getElementById('refresh-btn').style.display = 'none';
+  } catch {}
+
+  await loadInvoices();
+  await loadTemplates();
+})();
+
+async function api(url, opts={}) {
+  const res = await fetch(url, { headers:{'Content-Type':'application/json'}, ...opts });
+  if (res.status === 401) { window.location.href = '/login'; throw new Error('Unauthorized'); }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+async function loadInvoices() {
+  try {
+    const result = await api('/api/invoices');
+    ALL = result.data || [];
+    const badge = document.getElementById('sync-badge');
+    if (result.error) {
+      badge.textContent = 'NetSuite error';
+      badge.classList.add('stale');
+    } else if (result.lastUpdated) {
+      const d = new Date(result.lastUpdated);
+      badge.textContent = 'Updated ' + d.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+    }
+    applyFilters();
+    updateMetrics();
+  } catch(e) {
+    document.getElementById('tbl').innerHTML = `<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--red);font-family:'DM Mono',monospace;">Failed to load: ${e.message}</td></tr>`;
+  }
+}
+
+async function loadTemplates() {
+  try {
+    templates = await api('/api/templates');
+    buildTemplateGrid();
+  } catch {}
+}
+
+async function refreshData() {
+  const btn = document.getElementById('refresh-btn');
+  btn.innerHTML = '<span class="spinner"></span>Refreshing…';
+  btn.disabled = true;
+  try {
+    const r = await api('/api/invoices/refresh', {method:'POST'});
+    await loadInvoices();
+    toast('Refreshed', `${r.count} overdue invoices loaded`, 'success');
+  } catch(e) {
+    toast('Refresh failed', e.message, 'error');
+  } finally {
+    btn.innerHTML = '↺ Refresh';
+    btn.disabled = false;
+  }
+}
+
+// ── Filtering & sorting ───────────────────────────────────────────────────────
+function applyFilters() {
+  let data = [...ALL];
+  if (activeAging === '30') data = data.filter(i => i.daysOverdue < 60);
+  if (activeAging === '60') data = data.filter(i => i.daysOverdue >= 60);
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    data = data.filter(i =>
+      i.customerName.toLowerCase().includes(q) ||
+      i.tranId.toLowerCase().includes(q)
+    );
+  }
+  data.sort((a,b) => {
+    const av = a[sortKey], bv = b[sortKey];
+    return typeof av === 'string' ? av.localeCompare(bv)*sortDir : (av-bv)*sortDir;
+  });
+  filtered = data;
+  render();
+}
+
+function setAging(f, el) {
+  activeAging = f;
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  applyFilters();
+}
+
+function onSearch(input) {
+  searchQuery = input.value.trim();
+  document.getElementById('clear-btn').classList.toggle('show', searchQuery.length > 0);
+  applyFilters();
+}
+
+function clearSearch() {
+  document.getElementById('customer-search').value = '';
+  searchQuery = '';
+  document.getElementById('clear-btn').classList.remove('show');
+  applyFilters();
+}
+
+function sortBy(key) {
+  if (sortKey === key) sortDir *= -1;
+  else { sortKey = key; sortDir = key === 'daysOverdue' ? -1 : 1; }
+  document.querySelectorAll('.sort-arrow').forEach(el => el.textContent = '');
+  document.getElementById('sort-'+key).textContent = sortDir === 1 ? ' ↑' : ' ↓';
+  document.querySelectorAll('th').forEach(th => th.classList.remove('sorted'));
+  event.currentTarget.classList.add('sorted');
+  applyFilters();
+}
+
+// ── Selection ─────────────────────────────────────────────────────────────────
+function toggleAll(cb) {
+  filtered.forEach(i => cb.checked ? selected.add(i.id) : selected.delete(i.id));
+  render(); updateSendBtn();
+}
+function toggleRow(id) {
+  selected.has(id) ? selected.delete(id) : selected.add(id);
+  updateSendBtn(); syncSelectAll();
+  const row = document.querySelector(`tr[data-id="${id}"]`);
+  if (row) row.classList.toggle('selected', selected.has(id));
+}
+function syncSelectAll() {
+  const cb = document.getElementById('select-all');
+  cb.checked = filtered.length > 0 && filtered.every(i => selected.has(i.id));
+  cb.indeterminate = !cb.checked && filtered.some(i => selected.has(i.id));
+}
+function selectAll() { ALL.forEach(i => selected.add(i.id)); render(); updateSendBtn(); }
+function deselectAll() { selected.clear(); render(); updateSendBtn(); }
+function updateSendBtn() {
+  const btn = document.getElementById('send-btn');
+  btn.disabled = selected.size === 0;
+  btn.textContent = selected.size > 0 ? `Send reminders (${selected.size})` : 'Send reminders';
+  const info = document.getElementById('sel-info');
+  if (selected.size > 0) {
+    const tot = ALL.filter(i => selected.has(i.id)).reduce((s,i) => s + i.amountRemaining, 0);
+    info.innerHTML = `<strong>${selected.size}</strong> selected · ${fmt(tot)}`;
+  } else { info.textContent = ''; }
+}
+
+// ── Render table ──────────────────────────────────────────────────────────────
+function render() {
+  const tbody = document.getElementById('tbl');
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text3);font-family:'DM Mono',monospace;">No invoices match the current filters</td></tr>`;
+    document.getElementById('count-info').textContent = `0 of ${ALL.length} invoices`;
+    syncSelectAll(); return;
+  }
+  tbody.innerHTML = filtered.map(inv => {
+    const is60 = inv.daysOverdue >= 60;
+    const bCls = is60 ? 'badge-60' : 'badge-30';
+    const bLbl = is60 ? '60–89d' : '30–59d';
+    const dColor = is60 ? 'style="color:var(--red)"' : 'style="color:var(--amber)"';
+    const due = inv.dueDate.slice(5).replace('-','/');
+    const chk = selected.has(inv.id) ? 'checked' : '';
+    const sel = selected.has(inv.id) ? 'selected' : '';
+    return `<tr data-id="${inv.id}" class="${sel}" onclick="rowClick(event,${inv.id})">
+      <td><input type="checkbox" class="checkbox" ${chk} onclick="event.stopPropagation()" onchange="toggleRow(${inv.id})"></td>
+      <td><span class="inv-id">${inv.tranId}</span></td>
+      <td title="${inv.customerName}">${inv.customerName}</td>
+      <td class="amount">${fmt(inv.amountRemaining)}</td>
+      <td class="due-date">${due}</td>
+      <td class="days-num" ${dColor}>${inv.daysOverdue}</td>
+      <td><span class="badge ${bCls}">${bLbl}</span></td>
+      <td style="text-align:center;"><button class="remind-btn" onclick="event.stopPropagation();remindOne(${inv.id})">remind</button></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('count-info').textContent = `${filtered.length} of ${ALL.length} invoices`;
+  syncSelectAll();
+}
+
+function rowClick(e, id) {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+  toggleRow(id);
+}
+
+function updateMetrics() {
+  const total = ALL.reduce((s,i) => s + i.amountRemaining, 0);
+  const critical = ALL.filter(i => i.daysOverdue >= 60).length;
+  const customers = new Set(ALL.map(i => i.customerName)).size;
+  document.getElementById('m-count').textContent = ALL.length;
+  document.getElementById('m-amount').textContent = fmt(total);
+  document.getElementById('m-critical').textContent = critical;
+  document.getElementById('m-customers').textContent = customers;
+}
+
+// ── Template grid ─────────────────────────────────────────────────────────────
+function buildTemplateGrid() {
+  const colors = { friendly:'#4caf82', formal:'#5b8dee', warning:'#e8a435', final:'#d94f4f' };
+  document.getElementById('template-grid').innerHTML = templates.map(t => `
+    <div class="template-card ${t.id===activeTemplate?'active':''}" onclick="selectTemplate('${t.id}',this)">
+      <div class="template-dot" style="background:${colors[t.id]||'#888'}"></div>
+      <div class="template-card-label">${t.label}</div>
+      <div class="template-card-desc">${t.description}</div>
+    </div>
+  `).join('');
+}
+
+function selectTemplate(id, el) {
+  activeTemplate = id;
+  document.querySelectorAll('.template-card').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ── Send modal ────────────────────────────────────────────────────────────────
+function openSendModal() {
+  pendingIds = [...selected];
+  const invs = ALL.filter(i => pendingIds.includes(i.id));
+  const total = invs.reduce((s,i) => s + i.amountRemaining, 0);
+  document.getElementById('modal-sub').textContent = `${invs.length} invoice${invs.length>1?'s':''} · ${fmt(total)} outstanding`;
+  document.getElementById('modal-inv-list').innerHTML =
+    invs.slice(0, 10).map(i => `${i.tranId} &nbsp;·&nbsp; ${i.customerName} &nbsp;·&nbsp; ${fmt(i.amountRemaining)} &nbsp;·&nbsp; ${i.daysOverdue}d`).join('<br>') +
+    (invs.length > 10 ? `<br><span style="color:var(--text3)">…and ${invs.length-10} more</span>` : '');
+  buildTemplateGrid();
+  document.getElementById('send-modal').classList.add('show');
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+async function previewTemplate() {
+  try {
+    const res = await fetch(`/api/template-preview/${activeTemplate}`);
+    const html = await res.text();
+    const frame = document.getElementById('preview-frame');
+    frame.srcdoc = html;
+    document.getElementById('preview-modal').classList.add('show');
+  } catch(e) { toast('Preview failed', e.message, 'error'); }
+}
+
+async function confirmSend() {
+  const btn = document.getElementById('confirm-send-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Sending…';
+  try {
+    const result = await api('/api/send', {
+      method: 'POST',
+      body: JSON.stringify({ invoiceIds: pendingIds, templateId: activeTemplate }),
+    });
+    const sent = result.results.filter(r => r.status === 'sent').length;
+    const failed = result.results.filter(r => r.status === 'failed').length;
+    closeModal('send-modal');
+    toast(
+      `${sent} reminder${sent!==1?'s':''} sent`,
+      failed > 0 ? `${failed} failed — check server logs` : `Template: ${activeTemplate}`,
+      failed > 0 ? 'error' : 'success'
+    );
+    selected.clear(); render(); updateSendBtn();
+  } catch(e) {
+    toast('Send failed', e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Send via NetSuite';
+  }
+}
+
+function remindOne(id) {
+  selected.clear();
+  selected.add(id);
+  updateSendBtn();
+  openSendModal();
+}
+
+// ── Export CSV ────────────────────────────────────────────────────────────────
+function exportCSV() {
+  const rows = [['Invoice','Customer','Amount Remaining','Due Date','Days Overdue','Bucket']];
+  ALL.forEach(i => rows.push([i.tranId, i.customerName, i.amountRemaining, i.dueDate, i.daysOverdue, i.daysOverdue>=60?'60-89d':'30-59d']));
+  const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `overdue-invoices-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(title, body, type='info') {
+  const el = document.getElementById('toast');
+  document.getElementById('toast-title').textContent = title;
+  document.getElementById('toast-body').textContent = body;
+  el.className = `toast show ${type}`;
+  setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+// ── Logout ────────────────────────────────────────────────────────────────────
+async function logout() {
+  await fetch('/api/logout', {method:'POST'});
+  window.location.href = '/login';
+}
+
+// ── Initial sort arrow ────────────────────────────────────────────────────────
+document.getElementById('sort-daysOverdue').textContent = ' ↓';
+document.querySelectorAll('th')[5]?.classList.add('sorted');
+</script>
+</body>
+</html>
