@@ -1,20 +1,8 @@
 [
   {
-    "username": "admin",
-    "passwordHash": "REPLACE_WITH_BCRYPT_HASH",
-    "name": "Admin",
-    "role": "admin"
-  },
-  {
-    "username": "sharon",
-    "passwordHash": "REPLACE_WITH_BCRYPT_HASH",
-    "name": "Sharon",
-    "role": "viewer"
-  },
-  {
-    "username": "jeff",
-    "passwordHash": "REPLACE_WITH_BCRYPT_HASH",
+    "username": "jeffk",
+    "passwordHash": "pbkdf2:sha256:310000:8VleX+ucCmYWLw8NmsuxZg==:b57zahMex172Vk4VZj7/s3Dw6J6k8P20iWGk0SyUVyc=",
     "name": "Jeff",
-    "role": "viewer"
+    "role": "admin"
   }
 ]
