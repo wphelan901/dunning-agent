@@ -16,7 +16,7 @@ const {
 function buildAuthHeader(method, url) {
   const nonce = crypto.randomBytes(16).toString('hex');
   const timestamp = Math.floor(Date.now() / 1000).toString();
-  const realm = NETSUITE_ACCOUNT_ID.toUpperCase();
+  const realm = NETSUITE_ACCOUNT_ID.toUpperCase().replace('-', '_');
 
   const params = {
     oauth_consumer_key: NETSUITE_CONSUMER_KEY,
