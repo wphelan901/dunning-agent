@@ -1,43 +1,71 @@
 const fetch  = require('node-fetch');
 const crypto = require('crypto');
 
-const A  = () => process.env.NETSUITE_ACCOUNT_ID;
-const CK = () => process.env.NETSUITE_CONSUMER_KEY;
-const CS = () => process.env.NETSUITE_CONSUMER_SECRET;
-const TK = () => process.env.NETSUITE_TOKEN_ID;
-const TS = () => process.env.NETSUITE_TOKEN_SECRET;
-
-function pct(s) {
-  return encodeURIComponent(String(s))
-    .replace(/!/g,'%21').replace(/'/g,'%27')
-    .replace(/\(/g,'%28').replace(/\)/g,'%29').replace(/\*/g,'%2A');
-}
-
 function sign(method, url) {
-  const ts    = String(Math.floor(Date.now()/1000));
+  const account = process.env.NETSUITE_ACCOUNT_ID;
+  const ck = process.env.NETSUITE_CONSUMER_KEY;
+  const cs = process.env.NETSUITE_CONSUMER_SECRET;
+  const tk = process.env.NETSUITE_TOKEN_ID;
+  const ts = process.env.NETSUITE_TOKEN_SECRET;
+  const realm = account.toUpperCase().replace(/-/g,'_');
+  const timestamp = String(Math.floor(Date.now()/1000));
   const nonce = crypto.randomBytes(16).toString('hex');
-  const realm = A().toUpperCase().replace(/-/g,'_');
 
-  const p = {
-    oauth_consumer_key:     CK(),
+  // Exact parameter names and order per NetSuite TBA docs
+  const oauthParams = {
+    oauth_consumer_key:     ck,
     oauth_nonce:            nonce,
     oauth_signature_method: 'HMAC-SHA256',
-    oauth_timestamp:        ts,
-    oauth_token:            TK(),
+    oauth_timestamp:        timestamp,
+    oauth_token:            tk,
     oauth_version:          '1.0',
   };
 
-  const ps  = Object.keys(p).sort().map(k=>`${pct(k)}=${pct(p[k])}`).join('&');
-  const bs  = [method.toUpperCase(), pct(url), pct(ps)].join('&');
-  const key = `${CS()}&${TS()}`;
-  const sig = crypto.createHmac('sha256', key).update(bs).digest('base64');
+  // Build normalized parameter string
+  const sortedKeys = Object.keys(oauthParams).sort();
+  const normalizedParams = sortedKeys
+    .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(oauthParams[k])}`)
+    .join('&');
 
-  const hp = Object.keys(p).sort().map(k=>`${k}="${pct(p[k])}"`).join(',');
-  return `OAuth realm="${realm}",${hp},oauth_signature="${pct(sig)}"`;
+  // Build signature base string
+  const baseString = [
+    method.toUpperCase(),
+    encodeURIComponent(url),
+    encodeURIComponent(normalizedParams)
+  ].join('&');
+
+  // Signing key — consumer_secret & token_secret (raw, not encoded)
+  const signingKey = `${cs}&${ts}`;
+  const signature = crypto
+    .createHmac('sha256', signingKey)
+    .update(baseString)
+    .digest('base64');
+
+  console.log('[ns] Account:', account);
+  console.log('[ns] Realm:', realm);
+  console.log('[ns] CK:', ck ? ck.slice(0,8)+'...' : 'MISSING');
+  console.log('[ns] TK:', tk ? tk.slice(0,8)+'...' : 'MISSING');
+  console.log('[ns] Signature:', signature.slice(0,20)+'...');
+
+  // Build Authorization header — exact format from NetSuite docs
+  // realm first, then params in alphabetical order, signature last
+  const headerValue = [
+    `OAuth realm="${realm}"`,
+    `oauth_consumer_key="${encodeURIComponent(ck)}"`,
+    `oauth_nonce="${encodeURIComponent(nonce)}"`,
+    `oauth_signature="${encodeURIComponent(signature)}"`,
+    `oauth_signature_method="HMAC-SHA256"`,
+    `oauth_timestamp="${encodeURIComponent(timestamp)}"`,
+    `oauth_token="${encodeURIComponent(tk)}"`,
+    `oauth_version="1.0"`,
+  ].join(', ');
+
+  console.log('[ns] Auth header (first 100):', headerValue.slice(0,100));
+  return headerValue;
 }
 
 function host() {
-  return A().toLowerCase().replace(/_/g,'-');
+  return process.env.NETSUITE_ACCOUNT_ID.toLowerCase().replace(/_/g,'-');
 }
 
 async function runSuiteQL(sql) {
@@ -45,14 +73,21 @@ async function runSuiteQL(sql) {
   const full = `${url}?limit=1000&offset=0`;
   const auth = sign('POST', url);
 
-  const res  = await fetch(full, {
+  console.log('[ns] Requesting:', url);
+
+  const res = await fetch(full, {
     method:  'POST',
-    headers: { 'Authorization': auth, 'Content-Type': 'application/json', 'Prefer': 'transient' },
-    body:    JSON.stringify({ q: sql }),
+    headers: {
+      'Authorization': auth,
+      'Content-Type':  'application/json',
+      'Prefer':        'transient',
+    },
+    body: JSON.stringify({ q: sql }),
   });
 
   const txt = await res.text();
-  console.log('[ns]', res.status, txt.slice(0,200));
+  console.log('[ns] Status:', res.status);
+  console.log('[ns] Response:', txt.slice(0,200));
   if (!res.ok) throw new Error(`NS ${res.status}: ${txt}`);
   return JSON.parse(txt);
 }
@@ -60,9 +95,12 @@ async function runSuiteQL(sql) {
 async function fetchOverdueInvoices() {
   const r = await runSuiteQL(`
     SELECT t.id, t.tranId, e.altName AS customerName,
-           t.amountRemaining, t.dueDate, (CURRENT_DATE - t.dueDate) AS daysOverdue
+           t.amountRemaining, t.dueDate,
+           (CURRENT_DATE - t.dueDate) AS daysOverdue
     FROM invoice t JOIN entity e ON t.entity = e.id
-    WHERE t.dueDate <= (CURRENT_DATE - 30) AND t.amountRemaining > 0 AND t.status = 'A'
+    WHERE t.dueDate <= (CURRENT_DATE - 30)
+      AND t.amountRemaining > 0
+      AND t.status = 'A'
     ORDER BY daysOverdue DESC`);
   return (r.items||[]).map(row=>({
     id: row.id, tranId: row.tranid, customerName: row.customername,
