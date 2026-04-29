@@ -308,12 +308,15 @@ async function loadInvoices() {
     const result = await api('/api/invoices');
     ALL = result.data || [];
     const badge = document.getElementById('sync-badge');
-    if (result.error) {
+    if (result.fallback) {
+      badge.textContent = 'Snapshot · Apr 28 2026';
+      badge.classList.add('stale');
+    } else if (result.error) {
       badge.textContent = 'NetSuite error';
       badge.classList.add('stale');
     } else if (result.lastUpdated) {
       const d = new Date(result.lastUpdated);
-      badge.textContent = 'Updated ' + d.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+      badge.textContent = 'Live · ' + d.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
     }
     applyFilters();
     updateMetrics();
