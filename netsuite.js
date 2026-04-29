@@ -1,6 +1,5 @@
 /**
  * netsuite.js — NetSuite REST/SuiteQL using OAuth 2.0 Client Credentials
- * Simpler and more reliable than OAuth 1.0a TBA
  */
 const fetch = require('node-fetch');
 
@@ -11,20 +10,25 @@ const {
 } = process.env;
 
 let cachedToken = null;
-let tokenExpiry  = 0;
+let tokenExpiry = 0;
 
-function getBaseUrl() {
-  const id = NETSUITE_ACCOUNT_ID.toLowerCase().replace(/_/g, '-');
-  return `https://${id}.suitetalk.api.netsuite.com`;
+function getHost() {
+  return NETSUITE_ACCOUNT_ID.toLowerCase().replace(/_/g, '-');
 }
 
-// ── Get OAuth 2.0 access token ───────────────────────────────────────────────
 async function getAccessToken() {
   if (cachedToken && Date.now() < tokenExpiry) return cachedToken;
 
-  const id      = NETSUITE_ACCOUNT_ID.toLowerCase().replace(/_/g, '-');
-  const url     = `https://${id}.suitetalk.api.netsuite.com/services/rest/auth/oauth2/v1/token`;
-  const creds   = Buffer.from(`${NETSUITE_CONSUMER_KEY}:${NETSUITE_CONSUMER_SECRET}`).toString('base64');
+  const host  = getHost();
+  const url   = `https://${host}.suitetalk.api.netsuite.com/services/rest/auth/oauth2/v1/token`;
+  const creds = Buffer.from(`${NETSUITE_CONSUMER_KEY}:${NETSUITE_CONSUMER_SECRET}`).toString('base64');
+
+  // NetSuite OAuth 2.0 client credentials requires these exact body params
+  const body = new URLSearchParams({
+    grant_type: 'client_credentials',
+  }).toString();
+
+  console.log('[netsuite] Requesting token from:', url);
 
   const res = await fetch(url, {
     method: 'POST',
@@ -32,23 +36,24 @@ async function getAccessToken() {
       'Authorization': `Basic ${creds}`,
       'Content-Type':  'application/x-www-form-urlencoded',
     },
-    body: 'grant_type=client_credentials',
+    body,
   });
 
   const text = await res.text();
+  console.log('[netsuite] Token response:', res.status, text.slice(0, 200));
+
   if (!res.ok) throw new Error(`NetSuite token error ${res.status}: ${text}`);
 
-  const data    = JSON.parse(text);
-  cachedToken   = data.access_token;
-  tokenExpiry   = Date.now() + (data.expires_in - 60) * 1000;
+  const data  = JSON.parse(text);
+  cachedToken = data.access_token;
+  tokenExpiry = Date.now() + ((data.expires_in || 3600) - 60) * 1000;
   return cachedToken;
 }
 
-// ── SuiteQL runner ───────────────────────────────────────────────────────────
 async function runSuiteQL(sql, limit = 1000, offset = 0) {
   const token   = await getAccessToken();
-  const baseUrl = `${getBaseUrl()}/services/rest/query/v1/suiteql`;
-  const fullUrl = `${baseUrl}?limit=${limit}&offset=${offset}`;
+  const host    = getHost();
+  const fullUrl = `https://${host}.suitetalk.api.netsuite.com/services/rest/query/v1/suiteql?limit=${limit}&offset=${offset}`;
 
   const res = await fetch(fullUrl, {
     method:  'POST',
@@ -65,7 +70,6 @@ async function runSuiteQL(sql, limit = 1000, offset = 0) {
   return JSON.parse(text);
 }
 
-// ── Fetch overdue invoices 30+ days ─────────────────────────────────────────
 async function fetchOverdueInvoices() {
   const sql = `
     SELECT t.id, t.tranId, e.altName AS customerName,
@@ -89,10 +93,10 @@ async function fetchOverdueInvoices() {
   }));
 }
 
-// ── Send email via NetSuite ──────────────────────────────────────────────────
 async function sendNetSuiteEmail({ customerId, subject, body }) {
   const token = await getAccessToken();
-  const url   = `${getBaseUrl()}/services/rest/record/v1/message`;
+  const host  = getHost();
+  const url   = `https://${host}.suitetalk.api.netsuite.com/services/rest/record/v1/message`;
   const res   = await fetch(url, {
     method:  'POST',
     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
