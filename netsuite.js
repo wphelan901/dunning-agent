@@ -1,82 +1,86 @@
-/**
- * netsuite.js — NetSuite REST/SuiteQL using netsuite-rest library
- */
-const NsRest = require('netsuite-rest');
+const fetch  = require('node-fetch');
+const crypto = require('crypto');
 
-const {
-  NETSUITE_ACCOUNT_ID,
-  NETSUITE_CONSUMER_KEY,
-  NETSUITE_CONSUMER_SECRET,
-  NETSUITE_TOKEN_ID,
-  NETSUITE_TOKEN_SECRET,
-} = process.env;
+const A  = () => process.env.NETSUITE_ACCOUNT_ID;
+const CK = () => process.env.NETSUITE_CONSUMER_KEY;
+const CS = () => process.env.NETSUITE_CONSUMER_SECRET;
+const TK = () => process.env.NETSUITE_TOKEN_ID;
+const TS = () => process.env.NETSUITE_TOKEN_SECRET;
 
-function getClient() {
-  return new NsRest({
-    consumer_key:    NETSUITE_CONSUMER_KEY,
-    consumer_secret: NETSUITE_CONSUMER_SECRET,
-    token:           NETSUITE_TOKEN_ID,
-    token_secret:    NETSUITE_TOKEN_SECRET,
-    account:         NETSUITE_ACCOUNT_ID,
-    base_url:        `https://${NETSUITE_ACCOUNT_ID.toLowerCase().replace(/_/g,'-')}.suitetalk.api.netsuite.com`,
-  });
+function pct(s) {
+  return encodeURIComponent(String(s))
+    .replace(/!/g,'%21').replace(/'/g,'%27')
+    .replace(/\(/g,'%28').replace(/\)/g,'%29').replace(/\*/g,'%2A');
 }
 
-async function runSuiteQL(sql, limit = 1000, offset = 0) {
-  const ns  = getClient();
-  const res = await ns.request({
-    path:   `query/v1/suiteql?limit=${limit}&offset=${offset}`,
-    method: 'POST',
-    body:   JSON.stringify({ q: sql }),
-    headers: { 'Content-Type': 'application/json', 'Prefer': 'transient' },
+function sign(method, url) {
+  const ts    = String(Math.floor(Date.now()/1000));
+  const nonce = crypto.randomBytes(16).toString('hex');
+  const realm = A().toUpperCase().replace(/-/g,'_');
+
+  const p = {
+    oauth_consumer_key:     CK(),
+    oauth_nonce:            nonce,
+    oauth_signature_method: 'HMAC-SHA256',
+    oauth_timestamp:        ts,
+    oauth_token:            TK(),
+    oauth_version:          '1.0',
+  };
+
+  const ps  = Object.keys(p).sort().map(k=>`${pct(k)}=${pct(p[k])}`).join('&');
+  const bs  = [method.toUpperCase(), pct(url), pct(ps)].join('&');
+  const key = `${CS()}&${TS()}`;
+  const sig = crypto.createHmac('sha256', key).update(bs).digest('base64');
+
+  const hp = Object.keys(p).sort().map(k=>`${k}="${pct(p[k])}"`).join(',');
+  return `OAuth realm="${realm}",${hp},oauth_signature="${pct(sig)}"`;
+}
+
+function host() {
+  return A().toLowerCase().replace(/_/g,'-');
+}
+
+async function runSuiteQL(sql) {
+  const url  = `https://${host()}.suitetalk.api.netsuite.com/services/rest/query/v1/suiteql`;
+  const full = `${url}?limit=1000&offset=0`;
+  const auth = sign('POST', url);
+
+  const res  = await fetch(full, {
+    method:  'POST',
+    headers: { 'Authorization': auth, 'Content-Type': 'application/json', 'Prefer': 'transient' },
+    body:    JSON.stringify({ q: sql }),
   });
 
-  if (res.status !== 200) {
-    const text = await res.text();
-    throw new Error(`NetSuite SuiteQL error ${res.status}: ${text}`);
-  }
-  return res.json();
+  const txt = await res.text();
+  console.log('[ns]', res.status, txt.slice(0,200));
+  if (!res.ok) throw new Error(`NS ${res.status}: ${txt}`);
+  return JSON.parse(txt);
 }
 
 async function fetchOverdueInvoices() {
-  const sql = `
+  const r = await runSuiteQL(`
     SELECT t.id, t.tranId, e.altName AS customerName,
-           t.amountRemaining, t.dueDate,
-           (CURRENT_DATE - t.dueDate) AS daysOverdue
-    FROM invoice t
-    JOIN entity e ON t.entity = e.id
-    WHERE t.dueDate        <= (CURRENT_DATE - 30)
-      AND t.amountRemaining >  0
-      AND t.status          = 'A'
-    ORDER BY daysOverdue DESC`;
-
-  const result = await runSuiteQL(sql);
-  return (result.items || []).map(row => ({
-    id:              row.id,
-    tranId:          row.tranid,
-    customerName:    row.customername,
-    amountRemaining: parseFloat(row.amountremaining) || 0,
-    dueDate:         row.duedate,
-    daysOverdue:     parseInt(row.daysoverdue) || 0,
+           t.amountRemaining, t.dueDate, (CURRENT_DATE - t.dueDate) AS daysOverdue
+    FROM invoice t JOIN entity e ON t.entity = e.id
+    WHERE t.dueDate <= (CURRENT_DATE - 30) AND t.amountRemaining > 0 AND t.status = 'A'
+    ORDER BY daysOverdue DESC`);
+  return (r.items||[]).map(row=>({
+    id: row.id, tranId: row.tranid, customerName: row.customername,
+    amountRemaining: parseFloat(row.amountremaining)||0,
+    dueDate: row.duedate, daysOverdue: parseInt(row.daysoverdue)||0,
   }));
 }
 
 async function sendNetSuiteEmail({ customerId, subject, body }) {
-  const ns  = getClient();
-  const res = await ns.request({
-    path:   'record/v1/message',
-    method: 'POST',
-    body:   JSON.stringify({
-      subject, message: body, incoming: false,
-      messageType: { id: 'EMAIL' },
-      recipient:   [{ id: String(customerId) }],
-    }),
-    headers: { 'Content-Type': 'application/json' },
+  const url  = `https://${host()}.suitetalk.api.netsuite.com/services/rest/record/v1/message`;
+  const auth = sign('POST', url);
+  const res  = await fetch(url, {
+    method:  'POST',
+    headers: { 'Authorization': auth, 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ subject, message: body, incoming: false,
+      messageType: { id: 'EMAIL' }, recipient: [{ id: String(customerId) }] }),
   });
-  if (res.status !== 200 && res.status !== 204) {
-    const t = await res.text();
-    throw new Error(`NetSuite email error ${res.status}: ${t}`);
-  }
+  if (!res.ok) { const t = await res.text(); throw new Error(`NS email ${res.status}: ${t}`); }
   return true;
 }
 
